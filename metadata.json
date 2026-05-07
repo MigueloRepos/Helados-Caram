@@ -1,0 +1,8 @@
+{
+  "name": "Helados Caram",
+  "description": "Ice cream ordering app for Helados Caram and flavor of the day Moscadel",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
