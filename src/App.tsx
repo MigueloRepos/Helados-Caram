@@ -4,7 +4,83 @@
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, AlertCircle, ChevronDown, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudFog, CloudDrizzle, MapPin, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronDown, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudFog, CloudDrizzle, MapPin, Loader2, Coffee, IceCream, Wine, Cherry, Citrus, Cookie, Star, Leaf, CakeSlice } from 'lucide-react';
+
+const getFlavorConfig = (flavor: string) => {
+  const f = flavor.toLowerCase();
+  
+  if (f.includes('moscatel') || f.includes('uva') || f.includes('vino')) {
+    return { 
+      color: '#8d50e6', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(141,80,230,0.25)]', 
+      Icon: Wine,
+      tags: ['Uvas Frescas', 'Miel de Caña', 'Nata Artesanal'],
+      tagColors: ['bg-purple-100 border-purple-200 text-purple-700', 'bg-indigo-50 border-indigo-100 text-indigo-700', 'bg-blue-50 border-blue-100 text-blue-700']
+    };
+  }
+  if (f.includes('tiramisú') || f.includes('tiramisu') || f.includes('cafe') || f.includes('café') || f.includes('coffee')) {
+    return { 
+      color: '#8b5a2b', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(139,90,43,0.25)]', 
+      Icon: CakeSlice,
+      tags: ['Café Espresso', 'Mascarpone', 'Cacao Puro'],
+      tagColors: ['bg-orange-100 border-orange-200 text-orange-800', 'bg-amber-100 border-amber-200 text-amber-800', 'bg-yellow-100 border-yellow-200 text-yellow-800']
+    };
+  }
+  if (f.includes('chocolate') || f.includes('cacao') || f.includes('bombón')) {
+    return { 
+      color: '#5c3a21', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(92,58,33,0.25)]', 
+      Icon: Cookie,
+      tags: ['Cacao 70%', 'Avellanas', 'Leche Fresca'],
+      tagColors: ['bg-stone-200 border-stone-300 text-stone-800', 'bg-orange-50 border-orange-100 text-orange-800', 'bg-amber-50 border-amber-100 text-amber-800']
+    };
+  }
+  if (f.includes('fresa') || f.includes('frutilla') || f.includes('cereza') || f.includes('frutos rojos')) {
+    return { 
+      color: '#e84c6b', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(232,76,107,0.25)]', 
+      Icon: Cherry,
+      tags: ['Fresas', 'Nata', 'Sirope Natural'],
+      tagColors: ['bg-rose-100 border-rose-200 text-rose-700', 'bg-pink-50 border-pink-100 text-pink-700', 'bg-red-50 border-red-100 text-red-700']
+    };
+  }
+  if (f.includes('limón') || f.includes('limon') || f.includes('naranja') || f.includes('citrico') || f.includes('mango')) {
+    return { 
+      color: '#eab308', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(234,179,8,0.25)]', 
+      Icon: Citrus,
+      tags: ['Zumo Natural', 'Hierbabuena', 'Cítricos Frescos'],
+      tagColors: ['bg-yellow-100 border-yellow-200 text-yellow-700', 'bg-lime-50 border-lime-100 text-lime-700', 'bg-amber-50 border-amber-100 text-amber-700']
+    };
+  }
+  if (f.includes('vainilla') || f.includes('mantecado') || f.includes('caramelo') || f.includes('turrón') || f.includes('turron')) {
+    return { 
+      color: '#d4b574', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(212,181,116,0.25)]', 
+      Icon: IceCream,
+      tags: ['Vainilla', 'Leche Fresca', 'Caramelo Suave'],
+      tagColors: ['bg-amber-100 border-amber-200 text-amber-700', 'bg-yellow-50 border-yellow-100 text-yellow-700', 'bg-orange-50 border-orange-100 text-orange-700']
+    };
+  }
+  if (f.includes('menta') || f.includes('pistacho') || f.includes('manzana')) {
+    return { 
+      color: '#10b981', 
+      dropShadow: 'drop-shadow-[0_2px_8px_rgba(16,185,129,0.25)]', 
+      Icon: Leaf,
+      tags: ['Hojas de Menta', 'Chocolate Crujiente', 'Crema'],
+      tagColors: ['bg-emerald-100 border-emerald-200 text-emerald-700', 'bg-green-50 border-green-100 text-green-700', 'bg-teal-50 border-teal-100 text-teal-700']
+    };
+  }
+  
+  return { 
+    color: '#8d50e6', 
+    dropShadow: 'drop-shadow-[0_2px_8px_rgba(141,80,230,0.25)]', 
+    Icon: Star,
+    tags: ['Receta Secreta', 'Dulzor', 'Sabor Artesanal'],
+    tagColors: ['bg-purple-100 border-purple-200 text-purple-700', 'bg-indigo-50 border-indigo-100 text-indigo-700', 'bg-blue-50 border-blue-100 text-blue-700']
+  };
+};
 
 export default function App() {
   const [quantity, setQuantity] = useState('');
@@ -20,6 +96,31 @@ export default function App() {
     code?: number;
     city?: string;
   }>({ status: 'loading' });
+
+  const [flavorOfTheDay, setFlavorOfTheDay] = useState('Moscatel');
+  const [flavorLoading, setFlavorLoading] = useState(true);
+  
+  const flavorConfig = getFlavorConfig(flavorOfTheDay);
+
+  // Fetch flavor from Google Sheets
+  useEffect(() => {
+    const fetchFlavor = async () => {
+      try {
+        const url = 'https://docs.google.com/spreadsheets/d/1erM25Ah42IhrtrnCvb3wDgQ0Zk8P99lUy3tYr3mJ0E4/export?format=csv';
+        const response = await fetch(url);
+        const text = await response.text();
+        const flavor = text.replace(/['"]+/g, '').trim();
+        if (flavor) {
+          setFlavorOfTheDay(flavor);
+        }
+      } catch (error) {
+        console.error('Error fetching flavor:', error);
+      } finally {
+        setFlavorLoading(false);
+      }
+    };
+    fetchFlavor();
+  }, []);
 
   // Efecto Parallax Sutil: rastreo de cursor
   useEffect(() => {
@@ -118,7 +219,7 @@ export default function App() {
       // Enviar SMS
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const sep = isIOS ? '&' : '?';
-      const message = encodeURIComponent(`Hola, quiero pedir ${quantity} unidad(es) de helado sabor Moscatel.`);
+      const message = encodeURIComponent(`Hola, quiero pedir ${quantity} unidad(es) de helado sabor ${flavorOfTheDay}.`);
       window.location.href = `sms:+5355260778${sep}body=${message}`;
 
       setTimeout(() => {
@@ -222,12 +323,23 @@ export default function App() {
             </motion.div>
           </motion.div>
           
-          <motion.h3 layout className="font-cursive text-5xl sm:text-6xl text-[#8d50e6] drop-shadow-[0_2px_8px_rgba(141,80,230,0.25)] tracking-wide mb-1">
-            Moscatel
+          <motion.h3 
+            layout 
+            className={`font-cursive text-5xl sm:text-6xl tracking-wide mb-1 flex items-center justify-center gap-3 min-h-[72px] ${flavorConfig.dropShadow}`}
+            style={{ color: flavorConfig.color }}
+          >
+            {flavorLoading ? (
+              <Loader2 className="w-8 h-8 animate-spin opacity-50" style={{ color: flavorConfig.color }} />
+            ) : (
+              <>
+                <span>{flavorOfTheDay}</span>
+                <flavorConfig.Icon size={46} className="opacity-90" strokeWidth={2} />
+              </>
+            )}
           </motion.h3>
 
           <AnimatePresence>
-            {showDetails && (
+            {showDetails && !flavorLoading && (
               <motion.div
                 initial={{ opacity: 0, height: 0, marginTop: 0 }}
                 animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
@@ -237,12 +349,12 @@ export default function App() {
               >
                 <div className="w-8 h-[1px] bg-gray-200 mb-3 rounded-full"></div>
                 <p className="font-medium text-[15px] leading-relaxed max-w-[280px] mb-3">
-                  Un helado suave y cremoso con notas dulces y florales, elaborado con auténtico vino Moscatel.
+                  Un helado suave y cremoso, elaborado con los mejores ingredientes para ofrecerte el auténtico sabor de <span className="font-semibold text-gray-700">{flavorOfTheDay}</span>.
                 </p>
                 <div className="flex flex-wrap justify-center gap-1.5 mt-1">
-                  <span className="px-2.5 py-1 bg-purple-100 border border-purple-200 text-purple-700 rounded-full text-xs font-semibold shadow-sm">Uvas Frescas</span>
-                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-xs font-semibold shadow-sm">Miel de Caña</span>
-                  <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 rounded-full text-xs font-semibold shadow-sm">Nata Artesanal</span>
+                  {flavorConfig.tags.map((tag, index) => (
+                    <span key={tag} className={`px-2.5 py-1 border rounded-full text-xs font-semibold shadow-sm ${flavorConfig.tagColors[index]}`}>{tag}</span>
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -361,7 +473,7 @@ export default function App() {
                   <p className="text-sm font-semibold text-gray-700 text-center mb-2">Recomendación para hoy</p>
                   <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-3 border border-purple-100/50">
                     <p className="text-xs text-gray-600 leading-relaxed text-center">
-                      {(weatherState.temp || 0) > 25 ? "¡Hace calor! Un helado de Moscatel es perfecto para refrescarse." : "Incluso con este tiempo, un Moscatel siempre alegra el día."}
+                      {(weatherState.temp || 0) > 25 ? `¡Hace calor! Un helado de ${flavorLoading ? 'hoy' : flavorOfTheDay} es perfecto para refrescarse.` : `Incluso con este tiempo, un deliciosísimo helado de ${flavorLoading ? 'hoy' : flavorOfTheDay} siempre alegra el día.`}
                     </p>
                   </div>
                 </motion.div>
