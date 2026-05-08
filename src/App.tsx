@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState, useEffect } from 'react';
+import { GoogleGenAI, Type } from '@google/genai';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, AlertCircle, ChevronDown, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudFog, CloudDrizzle, MapPin, Loader2, Coffee, IceCream, Wine, Cherry, Citrus, Cookie, Star, Leaf, CakeSlice } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronDown, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudFog, CloudDrizzle, MapPin, Loader2, Coffee, IceCream, Wine, Cherry, Citrus, Cookie, Star, Leaf, CakeSlice, Banknote, SmartphoneNfc, Landmark, X, Bell } from 'lucide-react';
 
 const getFlavorConfig = (flavor: string) => {
   const f = flavor.toLowerCase();
@@ -82,11 +83,58 @@ const getFlavorConfig = (flavor: string) => {
   };
 };
 
+const DEFAULT_T = {
+  greetingMorning: 'Buenos días',
+  greetingAfternoon: 'Buenas tardes',
+  greetingNight: 'Buenas noches',
+  welcome: 'Bienvenidos',
+  to: 'a',
+  shopName: 'Helados Caram',
+  flavorTitle: 'Sabor del día',
+  flavorDescTemplate: 'Un helado suave y cremoso, elaborado con los mejores ingredientes para ofrecerte el auténtico sabor de',
+  idleText: 'Introduzca cantidad a pedir',
+  errorText: 'Cantidad inválida',
+  successText: '¡Preparando pedido!',
+  sendBtn: 'Enviar',
+  totalText: 'Total a pagar',
+  currency: 'CUP',
+  weatherErrorLabel: 'Ubicación oculta',
+  weatherUnsupported: 'Sistema no soportado',
+  weatherLocating: 'Localizando...',
+  weatherSunny: 'Soleado',
+  weatherCloudy: 'Nublado',
+  weatherFog: 'Niebla',
+  weatherDrizzle: 'Llovizna',
+  weatherRain: 'Lluvia',
+  weatherSnow: 'Nieve',
+  weatherStorm: 'Tormenta',
+  weatherClear: 'Despejado',
+  recommendationTitle: 'Recomendación para hoy',
+  hotText: '¡Hace calor! Un helado de',
+  hotTail: 'es perfecto para refrescarse.',
+  coldText: 'Incluso con este tiempo, un deliciosísimo helado de',
+  coldTail: 'siempre alegra el día.',
+  smsPrefix: 'Hola, quiero pedir',
+  smsUnits: 'unidad(es) de helado sabor',
+  paymentTitle: 'Método de pago',
+  paymentCash: 'Efectivo (CUP)',
+  paymentZelle: 'Zelle',
+  paymentBizum: 'Bizum',
+  paymentIban: 'Transferencia (IBAN / CUP)',
+  paymentInstructions: 'Realiza el pago usando la siguiente información:',
+  paymentConfirm: 'Confirmar pedido',
+  zelleEmail: 'pagos@heladoscaram.com',
+  bizumPhone: '+34 600 000 000',
+  ibanCupAccount: '9200 0000 0000 0000'
+};
+
 export default function App() {
   const [quantity, setQuantity] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [showDetails, setShowDetails] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
   
   // Estado del tiempo (Navegación Pulgar-First / Glassmorphism)
   const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
@@ -99,27 +147,83 @@ export default function App() {
 
   const [flavorOfTheDay, setFlavorOfTheDay] = useState('Moscatel');
   const [flavorLoading, setFlavorLoading] = useState(true);
+  const [greeting, setGreeting] = useState('');
+  const [notification, setNotification] = useState('');
   
   const flavorConfig = getFlavorConfig(flavorOfTheDay);
 
-  // Fetch flavor from Google Sheets
+  const [t, setT] = useState(DEFAULT_T);
+  const [translatedTags, setTranslatedTags] = useState<string[] | null>(null);
+  const tagsToDisplay = translatedTags || flavorConfig.tags;
+
   useEffect(() => {
-    const fetchFlavor = async () => {
+    const translate = async () => {
+      try {
+        const lang = navigator.language;
+        if (lang.startsWith('es')) return;
+        
+        const payload = {
+          strings: DEFAULT_T,
+          currentTags: flavorConfig.tags
+        };
+
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const res = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: `Translate all string values in the following JSON object to the language corresponding to locale: "${lang}". Keep exact same keys. Return ONLY valid JSON.\n\n${JSON.stringify(payload)}`,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                strings: { type: Type.OBJECT },
+                currentTags: { type: Type.ARRAY, items: { type: Type.STRING } }
+              }
+            }
+          }
+        });
+
+        const extracted = JSON.parse(res.text.trim());
+        if (extracted.strings) setT(extracted.strings);
+        if (extracted.currentTags) setTranslatedTags(extracted.currentTags);
+      } catch (e) {
+        console.error('Translation error:', e);
+      }
+    };
+    translate();
+  }, [flavorConfig.tags]);
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) setGreeting(t.greetingMorning);
+    else if (hour >= 12 && hour < 20) setGreeting(t.greetingAfternoon);
+    else setGreeting(t.greetingNight);
+  }, [t]);
+
+  // Fetch flavor and notification from Google Sheets
+  useEffect(() => {
+    const fetchData = async () => {
       try {
         const url = 'https://docs.google.com/spreadsheets/d/1erM25Ah42IhrtrnCvb3wDgQ0Zk8P99lUy3tYr3mJ0E4/export?format=csv';
         const response = await fetch(url);
         const text = await response.text();
-        const flavor = text.replace(/['"]+/g, '').trim();
-        if (flavor) {
-          setFlavorOfTheDay(flavor);
+        const lines = text.split('\n');
+        if (lines.length > 0) {
+          const firstRow = lines[0];
+          const cols = firstRow.match(/("(?:[^"\\]|\\.)*"|[^,]+)/g) || [];
+          const flavor = (cols[0] || '').replace(/^"|"$/g, '').trim();
+          const notif = (cols[1] || '').replace(/^"|"$/g, '').trim();
+          
+          if (flavor) setFlavorOfTheDay(flavor);
+          if (notif) setNotification(notif);
         }
       } catch (error) {
-        console.error('Error fetching flavor:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setFlavorLoading(false);
       }
     };
-    fetchFlavor();
+    fetchData();
   }, []);
 
   // Efecto Parallax Sutil: rastreo de cursor
@@ -146,12 +250,12 @@ export default function App() {
             const data = await res.json();
             
             // Try to get location name using a free geocoding API (Nominatim by OSM)
-            let city = "Tu ubicación";
+            let city = t.weatherErrorLabel;
             try {
               const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`);
               const geoData = await geoRes.json();
               if (geoData && geoData.address) {
-                city = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.state || "Tu ubicación";
+                city = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.state || t.weatherErrorLabel;
               }
             } catch (e) {
               // Ignore geocoding errors, just use fallback
@@ -165,20 +269,20 @@ export default function App() {
                 city
               });
             } else {
-              setWeatherState({ status: 'error', temp: 25, code: 0, city: "Ubicación oculta" });
+              setWeatherState({ status: 'error', temp: 25, code: 0, city: t.weatherErrorLabel });
             }
           } catch (error) {
-            setWeatherState({ status: 'error', temp: 25, code: 0, city: "Ubicación oculta" });
+            setWeatherState({ status: 'error', temp: 25, code: 0, city: t.weatherErrorLabel });
           }
         },
         () => {
-          setWeatherState({ status: 'error', temp: 25, code: 0, city: "Ubicación oculta" }); // permission denied fallback
+          setWeatherState({ status: 'error', temp: 25, code: 0, city: t.weatherErrorLabel }); // permission denied fallback
         }
       );
     } else {
-      setWeatherState({ status: 'error', temp: 25, code: 0, city: "Sistema no soportado" });
+      setWeatherState({ status: 'error', temp: 25, code: 0, city: t.weatherUnsupported });
     }
-  }, []);
+  }, [t.weatherErrorLabel, t.weatherUnsupported]);
 
   const getWeatherIcon = (code: number, size = 20) => {
     if (code === 0) return <Sun className="text-yellow-500 mb-[1px]" size={size} />;
@@ -192,14 +296,14 @@ export default function App() {
   };
 
   const getWeatherDesc = (code: number) => {
-    if (code === 0) return "Soleado"; // It feels better for ice creams
-    if ([1, 2, 3].includes(code)) return "Nublado";
-    if ([45, 48].includes(code)) return "Niebla";
-    if ([51, 53, 55, 56, 57].includes(code)) return "Llovizna";
-    if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "Lluvia";
-    if ([71, 73, 75, 77, 85, 86].includes(code)) return "Nieve";
-    if ([95, 96, 99].includes(code)) return "Tormenta";
-    return "Despejado";
+    if (code === 0) return t.weatherSunny;
+    if ([1, 2, 3].includes(code)) return t.weatherCloudy;
+    if ([45, 48].includes(code)) return t.weatherFog;
+    if ([51, 53, 55, 56, 57].includes(code)) return t.weatherDrizzle;
+    if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return t.weatherRain;
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return t.weatherSnow;
+    if ([95, 96, 99].includes(code)) return t.weatherStorm;
+    return t.weatherClear;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -214,19 +318,26 @@ export default function App() {
     
     // Simulando el tiempo de una petición para mostrar feedback
     setTimeout(() => {
-      setStatus('success');
-      
-      // Enviar SMS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const sep = isIOS ? '&' : '?';
-      const message = encodeURIComponent(`Hola, quiero pedir ${quantity} unidad(es) de helado sabor ${flavorOfTheDay}.`);
-      window.location.href = `sms:+5355260778${sep}body=${message}`;
-
-      setTimeout(() => {
-        setStatus('idle');
-        setQuantity('');
-      }, 2500);
+      setStatus('idle');
+      setShowPaymentModal(true);
     }, 800);
+  };
+
+  const confirmOrder = () => {
+    let paymentText = '';
+    if (selectedPayment === 'cash') paymentText = t.paymentCash;
+    if (selectedPayment === 'zelle') paymentText = t.paymentZelle;
+    if (selectedPayment === 'bizum') paymentText = t.paymentBizum;
+    if (selectedPayment === 'iban') paymentText = t.paymentIban;
+
+    const message = encodeURIComponent(`${t.smsPrefix} ${quantity} ${t.smsUnits} ${flavorOfTheDay}. (Pago: ${paymentText})`);
+    window.open(`https://wa.me/5355260778?text=${message}`, '_blank');
+    
+    setShowPaymentModal(false);
+    setSelectedPayment(null);
+    setStatus('success');
+    setQuantity('');
+    setTimeout(() => setStatus('idle'), 3000);
   };
 
   return (
@@ -252,6 +363,31 @@ export default function App() {
           className="absolute bottom-[-10%] right-[5%] w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-[120px]" 
         />
       </motion.div>
+
+      {/* Notification Banner */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20, height: 0, marginBottom: 0 }}
+            className="w-full max-w-[420px] mb-4 bg-indigo-50 border border-indigo-100 text-indigo-800 p-3.5 rounded-2xl shadow-[0_8px_16px_rgba(0,0,0,0.03)] z-20 flex items-start gap-3 relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-1 h-full bg-indigo-400"></div>
+            <Bell size={20} className="flex-shrink-0 mt-0.5 text-indigo-500" />
+            <p className="text-sm font-medium leading-relaxed flex-1 pt-0.5 pr-4 text-indigo-900/90 [text-wrap:balance]">
+              {notification}
+            </p>
+            <button 
+              onClick={() => setNotification('')} 
+              className="absolute top-3 right-3 p-1.5 bg-indigo-100/50 hover:bg-indigo-200 rounded-full transition-colors text-indigo-500"
+              aria-label="Cerrar notificación"
+            >
+               <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Glassmorphism 2.0 Card */}
       <motion.div 
@@ -286,23 +422,29 @@ export default function App() {
 
         {/* Textos que aparecen gradualmente */}
         <div className="text-center flex flex-col items-center space-y-1.5 mb-8">
+          <motion.p 
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.5 }}
+            className="text-sm font-bold text-gray-400 tracking-[0.2em] uppercase mb-1"
+          >
+            ¡{greeting}!
+          </motion.p>
           <motion.h1 
             initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }}
             className="text-3xl sm:text-4xl font-semibold text-[#5e5e5e] tracking-tight"
           >
-            Bienvenidos
+            {t.welcome}
           </motion.h1>
           <motion.span 
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 }}
             className="text-xl font-medium text-gray-400 font-cursive italic"
           >
-            a
+            {t.to}
           </motion.span>
           <motion.h2 
             initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.5 }}
             className="text-3xl sm:text-4xl font-bold text-[#5e5e5e] tracking-tight drop-shadow-sm"
           >
-            Helados Caram
+            {t.shopName}
           </motion.h2>
         </div>
 
@@ -314,7 +456,7 @@ export default function App() {
           className="text-center justify-center flex flex-col items-center mb-10 w-full py-5 px-6 bg-white/60 backdrop-blur-md rounded-[28px] shadow-[0_8px_24px_rgb(0,0,0,0.03)] border border-white/80 transition-shadow hover:shadow-[0_8px_32px_rgb(0,0,0,0.06)] cursor-pointer group"
         >
           <motion.div layout className="flex items-center gap-1.5 mb-1 text-gray-500 group-hover:text-gray-700 transition-colors">
-            <p className="text-[14px] font-semibold uppercase tracking-widest">Sabor del día</p>
+            <p className="text-[14px] font-semibold uppercase tracking-widest">{t.flavorTitle}</p>
             <motion.div
               animate={{ rotate: showDetails ? 180 : 0 }}
               transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -325,7 +467,7 @@ export default function App() {
           
           <motion.h3 
             layout 
-            className={`font-cursive text-5xl sm:text-6xl tracking-wide mb-1 flex items-center justify-center gap-3 min-h-[72px] ${flavorConfig.dropShadow}`}
+            className={`font-cursive text-5xl sm:text-6xl tracking-wide mb-1 flex items-center justify-center gap-3 sm:gap-4 min-h-[72px] ${flavorConfig.dropShadow}`}
             style={{ color: flavorConfig.color }}
           >
             {flavorLoading ? (
@@ -333,7 +475,21 @@ export default function App() {
             ) : (
               <>
                 <span>{flavorOfTheDay}</span>
-                <flavorConfig.Icon size={46} className="opacity-90" strokeWidth={2} />
+                <motion.div 
+                  whileHover={{ scale: 1.08, rotate: 8 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                  className="flex flex-shrink-0 items-center justify-center w-[52px] h-[52px] sm:w-[64px] sm:h-[64px] rounded-2xl sm:rounded-[20px]"
+                  style={{ 
+                    backgroundColor: `${flavorConfig.color}15`, 
+                    boxShadow: `0 8px 20px -4px ${flavorConfig.color}30, inset 0 2px 6px rgba(255,255,255,0.9), 0 0 0 1px ${flavorConfig.color}20`
+                  }}
+                >
+                  <flavorConfig.Icon 
+                    className="w-8 h-8 sm:w-10 sm:h-10 opacity-90" 
+                    style={{ color: flavorConfig.color, filter: `drop-shadow(0 4px 6px ${flavorConfig.color}40)` }} 
+                    strokeWidth={2.2} 
+                  />
+                </motion.div>
               </>
             )}
           </motion.h3>
@@ -349,11 +505,11 @@ export default function App() {
               >
                 <div className="w-8 h-[1px] bg-gray-200 mb-3 rounded-full"></div>
                 <p className="font-medium text-[15px] leading-relaxed max-w-[280px] mb-3">
-                  Un helado suave y cremoso, elaborado con los mejores ingredientes para ofrecerte el auténtico sabor de <span className="font-semibold text-gray-700">{flavorOfTheDay}</span>.
+                  {t.flavorDescTemplate} <span className="font-semibold text-gray-700">{flavorOfTheDay}</span>.
                 </p>
                 <div className="flex flex-wrap justify-center gap-1.5 mt-1">
-                  {flavorConfig.tags.map((tag, index) => (
-                    <span key={tag} className={`px-2.5 py-1 border rounded-full text-xs font-semibold shadow-sm ${flavorConfig.tagColors[index]}`}>{tag}</span>
+                  {tagsToDisplay.map((tag, index) => (
+                    <span key={tag} className={`px-2.5 py-1 border rounded-full text-xs font-semibold shadow-sm ${flavorConfig.tagColors[index] || 'bg-gray-100 border-gray-200 text-gray-700'}`}>{tag}</span>
                   ))}
                 </div>
               </motion.div>
@@ -372,7 +528,7 @@ export default function App() {
                   initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }} transition={{ duration: 0.2 }}
                   className="text-gray-600 text-[16px] font-medium"
                 >
-                  Introduzca cantidad a pedir
+                  {t.idleText}
                 </motion.p>
               )}
               {status === 'error' && (
@@ -381,7 +537,7 @@ export default function App() {
                   initial={{ opacity: 0, y: -5, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5 }} transition={{ duration: 0.2 }}
                   className="text-red-500 text-[16px] font-semibold flex items-center gap-2"
                 >
-                  <AlertCircle size={18} strokeWidth={2.5} /> Cantidad inválida
+                  <AlertCircle size={18} strokeWidth={2.5} /> {t.errorText}
                 </motion.p>
               )}
               {status === 'success' && (
@@ -390,7 +546,7 @@ export default function App() {
                   initial={{ opacity: 0, y: -5, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5 }} transition={{ duration: 0.2 }}
                   className="text-emerald-600 text-[16px] font-semibold flex items-center gap-2"
                 >
-                  <CheckCircle2 size={18} strokeWidth={2.5} /> ¡Preparando pedido!
+                  <CheckCircle2 size={18} strokeWidth={2.5} /> {t.successText}
                 </motion.p>
               )}
             </AnimatePresence>
@@ -445,10 +601,29 @@ export default function App() {
                   <CheckCircle2 className="w-6 h-6" />
                 </motion.div>
               ) : (
-                "Enviar"
+                t.sendBtn
               )}
             </motion.button>
           </motion.form>
+
+          {/* Monto Total */}
+          <AnimatePresence>
+            {quantity && parseInt(quantity) > 0 && status !== 'error' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                className="text-center overflow-hidden w-full flex justify-center"
+              >
+                <div className="flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm px-6 py-2.5 rounded-2xl border border-white/50 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-0.5">{t.totalText}</p>
+                  <p className="text-2xl font-black tracking-tight" style={{ color: flavorConfig.color }}>
+                    ${(parseInt(quantity) * 130).toLocaleString()} <span className="text-sm font-semibold text-gray-500">{t.currency}</span>
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
 
@@ -470,10 +645,10 @@ export default function App() {
                   transition={{ duration: 0.2 }}
                   className="mb-3 w-[260px] bg-white/80 backdrop-blur-[16px] border border-white/60 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.15)] rounded-3xl p-4 flex flex-col"
                 >
-                  <p className="text-sm font-semibold text-gray-700 text-center mb-2">Recomendación para hoy</p>
+                  <p className="text-sm font-semibold text-gray-700 text-center mb-2">{t.recommendationTitle}</p>
                   <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-3 border border-purple-100/50">
                     <p className="text-xs text-gray-600 leading-relaxed text-center">
-                      {(weatherState.temp || 0) > 25 ? `¡Hace calor! Un helado de ${flavorLoading ? 'hoy' : flavorOfTheDay} es perfecto para refrescarse.` : `Incluso con este tiempo, un deliciosísimo helado de ${flavorLoading ? 'hoy' : flavorOfTheDay} siempre alegra el día.`}
+                      {(weatherState.temp || 0) > 25 ? `${t.hotText} ${flavorLoading ? '...' : flavorOfTheDay} ${t.hotTail}` : `${t.coldText} ${flavorLoading ? '...' : flavorOfTheDay} ${t.coldTail}`}
                     </p>
                   </div>
                 </motion.div>
@@ -488,7 +663,7 @@ export default function App() {
               {weatherState.status === 'loading' ? (
                 <div className="flex items-center justify-center w-full gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                  <span className="text-sm font-medium text-gray-600">Localizando...</span>
+                  <span className="text-sm font-medium text-gray-600">{t.weatherLocating}</span>
                 </div>
               ) : (weatherState.status === 'success' || weatherState.status === 'error') && weatherState.temp !== undefined && weatherState.code !== undefined ? (
                 <>
@@ -519,6 +694,77 @@ export default function App() {
           © 2026 Helados Caram
         </p>
       </motion.footer>
+
+      {/* Payment Selection Modal */}
+      <AnimatePresence>
+        {showPaymentModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm relative overflow-hidden"
+            >
+              <button 
+                onClick={() => { setShowPaymentModal(false); setSelectedPayment(null); }} 
+                className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 transition-colors"
+                title="Cerrar"
+              >
+                <X size={18} />
+              </button>
+              
+              <h3 className="text-xl font-bold text-gray-800 mb-5 text-center">{t.paymentTitle}</h3>
+              
+              <div className="space-y-3 mb-6">
+                {[
+                  { id: 'cash', label: t.paymentCash, icon: Banknote, info: 'Pago a contra entrega.' },
+                  { id: 'zelle', label: t.paymentZelle, icon: SmartphoneNfc, info: `Email: ${t.zelleEmail}` },
+                  { id: 'bizum', label: t.paymentBizum, icon: SmartphoneNfc, info: `Teléfono: ${t.bizumPhone}` },
+                  { id: 'iban', label: t.paymentIban, icon: Landmark, info: `Cuenta: ${t.ibanCupAccount}` },
+                ].map(method => (
+                  <div 
+                    key={method.id} 
+                    onClick={() => setSelectedPayment(method.id)}
+                    className={`p-3 rounded-2xl border-2 flex items-center gap-3 cursor-pointer transition-all ${selectedPayment === method.id ? 'border-[#8d50e6] bg-purple-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
+                  >
+                    <method.icon size={24} className={selectedPayment === method.id ? 'text-[#8d50e6]' : 'text-gray-400'} />
+                    <div className="flex-1">
+                      <p className={`font-semibold ${selectedPayment === method.id ? 'text-[#8d50e6]' : 'text-gray-700'}`}>{method.label}</p>
+                      <AnimatePresence>
+                        {selectedPayment === method.id && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: 'auto' }} 
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <p className="text-[13px] border-t border-purple-200/50 mt-1.5 pt-1.5 text-purple-800 font-medium select-all">
+                              {method.info}
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                disabled={!selectedPayment}
+                onClick={confirmOrder}
+                className="w-full py-3.5 bg-[#8d50e6] text-white rounded-xl font-bold text-[15px] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#7a45c7] transition-colors shadow-lg shadow-purple-500/25 flex items-center justify-center gap-2"
+              >
+                {t.paymentConfirm}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
