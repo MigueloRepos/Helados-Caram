@@ -258,11 +258,9 @@ export default function App() {
     
     if (savedName) {
       setCustomerName(savedName);
-      setEventName(savedName);
     }
     if (savedAddress) {
       setCustomerAddress(savedAddress);
-      setEventAddress(savedAddress);
     }
 
     if (isFirstVisit) {
@@ -289,8 +287,6 @@ export default function App() {
   );
   
   // Estado para reserva de eventos
-  const [eventName, setEventName] = useState("");
-  const [eventAddress, setEventAddress] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
   const [eventQty, setEventQty] = useState("");
@@ -431,44 +427,53 @@ export default function App() {
 
   // Fetch weather data based on geolocation
   useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            // Fetch weather using Free Open-Meteo API
-            const res = await fetch(
-              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
-            );
-            const data = await res.json();
-
-            // Try to get location name using a free geocoding API (Nominatim by OSM)
-            let city = t.weatherErrorLabel;
+    const fetchWeather = () => {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
             try {
-              const geoRes = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
+              const { latitude, longitude } = position.coords;
+              // Fetch weather using Free Open-Meteo API
+              const res = await fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
               );
-              const geoData = await geoRes.json();
-              if (geoData && geoData.address) {
-                city =
-                  geoData.address.city ||
-                  geoData.address.town ||
-                  geoData.address.village ||
-                  geoData.address.state ||
-                  t.weatherErrorLabel;
-              }
-            } catch (e) {
-              // Ignore geocoding errors, just use fallback
-            }
+              const data = await res.json();
 
-            if (data.current_weather) {
-              setWeatherState({
-                status: "success",
-                temp: Math.round(data.current_weather.temperature),
-                code: data.current_weather.weathercode,
-                city,
-              });
-            } else {
+              // Try to get location name using a free geocoding API (Nominatim by OSM)
+              let city = t.weatherErrorLabel;
+              try {
+                const geoRes = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
+                );
+                const geoData = await geoRes.json();
+                if (geoData && geoData.address) {
+                  city =
+                    geoData.address.city ||
+                    geoData.address.town ||
+                    geoData.address.village ||
+                    geoData.address.state ||
+                    t.weatherErrorLabel;
+                }
+              } catch (e) {
+                // Ignore geocoding errors, just use fallback
+              }
+
+              if (data.current_weather) {
+                setWeatherState({
+                  status: "success",
+                  temp: Math.round(data.current_weather.temperature),
+                  code: data.current_weather.weathercode,
+                  city,
+                });
+              } else {
+                setWeatherState({
+                  status: "error",
+                  temp: 25,
+                  code: 0,
+                  city: t.weatherErrorLabel,
+                });
+              }
+            } catch (error) {
               setWeatherState({
                 status: "error",
                 temp: 25,
@@ -476,32 +481,30 @@ export default function App() {
                 city: t.weatherErrorLabel,
               });
             }
-          } catch (error) {
+          },
+          () => {
             setWeatherState({
               status: "error",
               temp: 25,
               code: 0,
               city: t.weatherErrorLabel,
-            });
-          }
-        },
-        () => {
-          setWeatherState({
-            status: "error",
-            temp: 25,
-            code: 0,
-            city: t.weatherErrorLabel,
-          }); // permission denied fallback
-        },
-      );
-    } else {
-      setWeatherState({
-        status: "error",
-        temp: 25,
-        code: 0,
-        city: t.weatherUnsupported,
-      });
-    }
+            }); // permission denied fallback
+          },
+        );
+      } else {
+        setWeatherState({
+          status: "error",
+          temp: 25,
+          code: 0,
+          city: t.weatherUnsupported,
+        });
+      }
+    };
+
+    fetchWeather();
+    const interval = setInterval(fetchWeather, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearInterval(interval);
   }, [t.weatherErrorLabel, t.weatherUnsupported]);
 
   const getWeatherIcon = (code: number, size = 20) => {
@@ -608,14 +611,16 @@ export default function App() {
     
     const typeLabel = eventType === "cups" ? t.tabUnits || "Vasos de 8oz" : t.tabTubs || "Tinas";
     const flavorsList = eventFlavors.join(", ");
-    const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${eventName}\n*Dirección:* ${eventAddress}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
+    
+    const eventPrice = eventType === "cups" ? 130 : 2800;
+    const totalEventAmount = parseInt(eventQty || "0") * eventPrice;
+
+    const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${customerName}\n*Dirección:* ${customerAddress}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Total:* $${totalEventAmount.toLocaleString()} ${t.currency || "CUP"}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
     
     setTimeout(() => {
       window.open(`https://wa.me/5355260778?text=${encodeURIComponent(message)}`, "_blank");
       setTimeout(() => {
         setEventStatus("idle");
-        setEventName("");
-        setEventAddress("");
         setEventQty("");
         setEventDate("");
         setEventTime("");
@@ -1244,7 +1249,7 @@ export default function App() {
                 {t.summaryTitle || "Resumen de tu pedido"}
               </h3>
 
-              <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 shadow-inner">
+              <div className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-100 shadow-inner">
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-sm text-gray-500 mt-0.5">
                     {t.summaryProduct || "Producto"}:
@@ -1291,6 +1296,17 @@ export default function App() {
                       {t.currency}
                     </span>
                   </span>
+                </div>
+              </div>
+              
+              <div className="bg-amber-50/50 rounded-2xl p-4 mb-6 border border-amber-100/50 relative">
+                <button type="button" onClick={() => setShowCustomerModal(true)} className="absolute top-4 right-4 text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline">
+                  Editar
+                </button>
+                <div className="flex flex-col gap-1.5 pr-10">
+                  <span className="text-xs font-semibold text-amber-800/60 uppercase tracking-wider">Mis Datos</span>
+                  <span className="text-sm font-bold text-gray-800">{customerName || 'No especificado'}</span>
+                  <span className="text-xs text-gray-500 font-medium line-clamp-2">{customerAddress || 'Dirección no especificada'}</span>
                 </div>
               </div>
 
@@ -1411,6 +1427,10 @@ export default function App() {
               </div>
 
               <form onSubmit={submitEventOrder} className="space-y-3.5 relative z-10">
+                <div className="flex justify-between items-center mb-1">
+                   <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Mis Datos</span>
+                   <button type="button" onClick={() => setShowCustomerModal(true)} className="text-xs text-amber-500 font-bold hover:text-amber-600 hover:underline">Editar info</button>
+                </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
                     <User size={16} />
@@ -1419,9 +1439,9 @@ export default function App() {
                     required
                     type="text"
                     placeholder={t.eventName || 'Nombre y Apellidos'}
-                    value={eventName}
-                    onChange={(e) => setEventName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold placeholder-gray-400 text-gray-800"
+                    value={customerName || ""}
+                    readOnly
+                    className="w-full pl-10 pr-4 py-3.5 bg-gray-100 border border-gray-200/80 rounded-xl text-sm outline-none transition-all font-semibold placeholder-gray-400 text-gray-400 cursor-default"
                   />
                 </div>
 
@@ -1433,9 +1453,9 @@ export default function App() {
                     required
                     type="text"
                     placeholder={t.eventAddress || 'Dirección particular'}
-                    value={eventAddress}
-                    onChange={(e) => setEventAddress(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold placeholder-gray-400 text-gray-800"
+                    value={customerAddress || ""}
+                    readOnly
+                    className="w-full pl-10 pr-4 py-3.5 bg-gray-100 border border-gray-200/80 rounded-xl text-sm outline-none transition-all font-semibold placeholder-gray-400 text-gray-400 cursor-default"
                   />
                 </div>
 
@@ -1580,10 +1600,6 @@ export default function App() {
                   if (customerAddress) localStorage.setItem('customer_address', customerAddress);
                   localStorage.setItem('visited_before', 'true');
                   setShowCustomerModal(false);
-                  
-                  // Update event form fields if they are empty
-                  if (!eventName && customerName) setEventName(customerName);
-                  if (!eventAddress && customerAddress) setEventAddress(customerAddress);
                 }}
                 className="space-y-4"
               >
