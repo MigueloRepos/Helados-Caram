@@ -246,6 +246,30 @@ export default function App() {
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
 
+  const [customerName, setCustomerName] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+
+  // Efecto para nuevos clientes
+  useEffect(() => {
+    const isFirstVisit = !localStorage.getItem('visited_before');
+    const savedName = localStorage.getItem('customer_name');
+    const savedAddress = localStorage.getItem('customer_address');
+    
+    if (savedName) {
+      setCustomerName(savedName);
+      setEventName(savedName);
+    }
+    if (savedAddress) {
+      setCustomerAddress(savedAddress);
+      setEventAddress(savedAddress);
+    }
+
+    if (isFirstVisit) {
+      setShowCustomerModal(true);
+    }
+  }, []);
+
   // Estado del tiempo (Navegación Pulgar-First / Glassmorphism)
   const [weatherMenuOpen, setWeatherMenuOpen] = useState(false);
   const [weatherState, setWeatherState] = useState<{
@@ -287,7 +311,8 @@ export default function App() {
   const isMultiFlavor = orderType === "individual" && parsedIndividualFlavors.length > 1;
   const activeFlavor = isMultiFlavor ? parsedIndividualFlavors[0] : (orderType === "individual" ? flavorOfTheDay : tubFlavor);
   
-  const totalMultiQty = Object.values(multiFlavorQuantities).reduce((acc, val) => acc + (val || 0), 0);
+  const multiVals = Object.values(multiFlavorQuantities) as number[];
+  const totalMultiQty: number = multiVals.reduce((acc, val) => acc + (val || 0), 0);
 
   const handleMultiQtyChange = (flavor: string, change: number) => {
     setMultiFlavorQuantities(prev => {
@@ -553,8 +578,15 @@ export default function App() {
       flavorText = `${quantity} ${currentSmsUnits} de ${activeFlavor}`;
     }
 
+    let customerInfoLabel = "";
+    if (customerName || customerAddress) {
+      customerInfoLabel = `\n\n*Cliente:* ${customerName || 'No especificado'}\n*Dirección:* ${customerAddress || 'No especificada'}`;
+    }
+
+    const totalAmount = (isMultiFlavor ? totalMultiQty : parseInt(quantity || "0")) * currentPrice;
+
     const message = encodeURIComponent(
-      `${t.smsPrefix} ${flavorText}. (Pago: ${paymentText})`,
+      `${t.smsPrefix} ${flavorText}. (Total: $${totalAmount.toLocaleString()} ${t.currency}) (Pago: ${paymentText})${customerInfoLabel}`,
     );
     window.open(`https://wa.me/5355260778?text=${message}`, "_blank");
 
@@ -593,7 +625,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#fafafc] overflow-hidden flex flex-col items-center py-6 sm:py-12 px-4 justify-between font-sans selection:bg-[#8d50e6]/20 text-gray-800">
+    <div className="relative min-h-screen bg-[#fafafc] overflow-hidden flex flex-col items-center py-4 sm:py-12 px-3 sm:px-4 justify-between font-sans selection:bg-[#8d50e6]/20 text-gray-800">
       {/* Animaciones de fondo para profundidad (Capas de profundidad) */}
       <motion.div
         animate={{
@@ -654,7 +686,7 @@ export default function App() {
           x: mousePosition.x * 0.5,
           y: mousePosition.y * 0.5,
         }}
-        className="relative z-10 w-full max-w-[420px] flex flex-col items-center flex-grow bg-white/70 backdrop-blur-[16px] border border-white/60 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05),_0_0_0_1px_rgba(255,255,255,0.4)_inset] rounded-[40px] p-6 sm:p-10 mx-auto"
+        className="relative z-10 w-full max-w-[420px] flex flex-col items-center flex-grow bg-white/70 backdrop-blur-[16px] border border-white/60 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05),_0_0_0_1px_rgba(255,255,255,0.4)_inset] rounded-[40px] p-5 sm:p-10 mx-auto"
       >
         {/* Imagen con hover 3D suave (Efecto 3D ligero) */}
         <motion.div
@@ -913,10 +945,10 @@ export default function App() {
               {isMultiFlavor ? (
                 <div className="w-full max-w-[320px] flex flex-col gap-2 relative z-20">
                   {parsedIndividualFlavors.map(flavor => (
-                    <div key={flavor} className="flex justify-between items-center bg-[#5e5c5a] shadow-[0_4px_12px_rgba(94,92,90,0.15)] rounded-2xl p-3 border border-white/5">
-                      <span className="font-semibold text-white/90 text-[15px]">{flavor}</span>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => handleMultiQtyChange(flavor, -1)} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-lg leading-none pb-0.5">-</button>
+                    <div key={flavor} className="flex justify-between items-center bg-[#5e5c5a] shadow-[0_4px_12px_rgba(94,92,90,0.15)] rounded-2xl p-2.5 sm:p-3 border border-white/5">
+                      <span className="font-semibold text-white/90 text-sm sm:text-[15px] pl-1 break-words line-clamp-2 leading-tight flex-1 pr-2">{flavor}</span>
+                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                        <button type="button" onClick={() => handleMultiQtyChange(flavor, -1)} className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-xl leading-none pb-0.5">-</button>
                         <input
                           type="number"
                           min="0"
@@ -925,10 +957,10 @@ export default function App() {
                             const val = parseInt(e.target.value);
                             setMultiFlavorQuantities(prev => ({ ...prev, [flavor]: isNaN(val) ? 0 : Math.max(0, val) }));
                           }}
-                          className="w-10 text-center font-bold text-white text-lg bg-transparent focus:outline-none focus:bg-white/10 rounded hide-arrows"
+                          className="w-8 sm:w-10 text-center font-bold text-white text-base sm:text-lg bg-transparent focus:outline-none focus:bg-white/10 rounded hide-arrows"
                           placeholder="0"
                         />
-                        <button type="button" onClick={() => handleMultiQtyChange(flavor, 1)} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-lg leading-none pb-0.5">+</button>
+                        <button type="button" onClick={() => handleMultiQtyChange(flavor, 1)} className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-xl leading-none pb-0.5">+</button>
                       </div>
                     </div>
                   ))}
@@ -973,7 +1005,7 @@ export default function App() {
                     status === "error" ? { x: [-8, 8, -6, 6, -3, 3, 0] } : {}
                   }
                   transition={{ duration: 0.4 }}
-                  className={`flex items-stretch justify-center h-[64px] w-full max-w-[300px] rounded-full p-1.5 transition-all duration-300 relative z-20 ${
+                  className={`flex items-stretch justify-center h-14 sm:h-[64px] w-full max-w-[300px] rounded-full p-1 sm:p-1.5 transition-all duration-300 relative z-20 ${
                     status === "error"
                       ? "bg-red-50 border-2 border-red-300 shadow-[0_8px_20px_rgba(239,68,68,0.2)]"
                       : "bg-[#5e5c5a] shadow-[0_12px_24px_rgba(94,92,90,0.25),_inset_0_2px_4px_rgba(255,255,255,0.15)] hover:shadow-[0_16px_32px_rgba(94,92,90,0.35),_inset_0_2px_4px_rgba(255,255,255,0.15)]"
@@ -1213,15 +1245,26 @@ export default function App() {
               </h3>
 
               <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 shadow-inner">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-500">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-sm text-gray-500 mt-0.5">
                     {t.summaryProduct || "Producto"}:
                   </span>
-                  <span className="text-sm font-semibold text-gray-800 text-right ml-4">
-                    {orderType === "individual"
-                      ? t.tabUnits || "Vasos de 8oz"
-                      : t.tabTubs || "Tinas"}{" "}
-                    - {activeFlavor}
+                  <span className="text-sm font-semibold text-gray-800 text-right ml-4 flex flex-col items-end">
+                    <span>
+                      {orderType === "individual"
+                        ? t.tabUnits || "Vasos de 8oz"
+                        : t.tabTubs || "Tinas"}
+                    </span>
+                    {isMultiFlavor ? (
+                      <span className="text-gray-600 text-xs mt-0.5">
+                        {parsedIndividualFlavors
+                          .filter(f => multiFlavorQuantities[f] > 0)
+                          .map(f => `${multiFlavorQuantities[f]}x ${f}`)
+                          .join(", ")}
+                      </span>
+                    ) : (
+                      <span className="text-gray-600 text-xs mt-0.5">{activeFlavor}</span>
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-between items-center mb-4">
@@ -1229,7 +1272,7 @@ export default function App() {
                     {t.summaryQuantity || "Cantidad"}:
                   </span>
                   <span className="text-sm font-semibold text-gray-800">
-                    {quantity}
+                    {isMultiFlavor ? totalMultiQty : quantity}
                   </span>
                 </div>
                 <div className="pt-3 border-t border-gray-200/60 flex justify-between items-center">
@@ -1242,7 +1285,7 @@ export default function App() {
                   >
                     $
                     {(
-                      parseInt(quantity || "0") * currentPrice
+                      (isMultiFlavor ? totalMultiQty : parseInt(quantity || "0")) * currentPrice
                     ).toLocaleString()}{" "}
                     <span className="text-sm text-gray-500 font-semibold">
                       {t.currency}
@@ -1498,6 +1541,87 @@ export default function App() {
                       <Send size={16} className="text-white/90 group-hover/btn:translate-x-1 group-hover/btn:-translate-y-0.5 transition-transform" />
                     </>
                   )}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Customer Modal for First-time Visitors */}
+      <AnimatePresence>
+        {showCustomerModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-md p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl p-7 w-full max-w-[360px] relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-amber-400 to-orange-500 opacity-20 pointer-events-none"></div>
+
+              <div className="text-center mt-2 mb-6">
+                <div className="mx-auto w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-lg shadow-amber-500/30 overflow-hidden">
+                  <img src="/logo.png" alt="Helados Caram Logo" className="w-full h-full object-cover" />
+                </div>
+                <h3 className="text-2xl font-black text-gray-800 tracking-tight mb-1" style={{ fontFamily: 'var(--font-cursive)' }}>¡Bienvenido a Helados Caram!</h3>
+                <p className="text-sm text-gray-500 font-medium leading-relaxed px-2">Complete sus datos para agilizar sus pedidos.</p>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (customerName) localStorage.setItem('customer_name', customerName);
+                  if (customerAddress) localStorage.setItem('customer_address', customerAddress);
+                  localStorage.setItem('visited_before', 'true');
+                  setShowCustomerModal(false);
+                  
+                  // Update event form fields if they are empty
+                  if (!eventName && customerName) setEventName(customerName);
+                  if (!eventAddress && customerAddress) setEventAddress(customerAddress);
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-3.5">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <User size={16} />
+                    </div>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Nombre y Apellidos"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold text-gray-700 placeholder-gray-400"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <MapPinHouse size={16} />
+                    </div>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Dirección particular"
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold text-gray-700 placeholder-gray-400"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-2 bg-gradient-to-r from-gray-800 to-gray-900 text-white font-bold text-[15px] py-4 rounded-xl shadow-[0_8px_20px_-6px_rgba(31,41,55,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(31,41,55,0.5)] transform hover:-translate-y-0.5 transition-all outline-none focus:ring-4 focus:ring-gray-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <span className="drop-shadow-sm">Guardar mis datos</span>
                 </button>
               </form>
             </motion.div>
