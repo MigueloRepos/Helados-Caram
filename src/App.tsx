@@ -915,9 +915,19 @@ export default function App() {
                   {parsedIndividualFlavors.map(flavor => (
                     <div key={flavor} className="flex justify-between items-center bg-[#5e5c5a] shadow-[0_4px_12px_rgba(94,92,90,0.15)] rounded-2xl p-3 border border-white/5">
                       <span className="font-semibold text-white/90 text-[15px]">{flavor}</span>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <button type="button" onClick={() => handleMultiQtyChange(flavor, -1)} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-lg leading-none pb-0.5">-</button>
-                        <span className="w-6 text-center font-bold text-white text-lg">{multiFlavorQuantities[flavor] || 0}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={multiFlavorQuantities[flavor] === 0 || multiFlavorQuantities[flavor] === undefined ? "" : multiFlavorQuantities[flavor]}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setMultiFlavorQuantities(prev => ({ ...prev, [flavor]: isNaN(val) ? 0 : Math.max(0, val) }));
+                          }}
+                          className="w-10 text-center font-bold text-white text-lg bg-transparent focus:outline-none focus:bg-white/10 rounded hide-arrows"
+                          placeholder="0"
+                        />
                         <button type="button" onClick={() => handleMultiQtyChange(flavor, 1)} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-lg leading-none pb-0.5">+</button>
                       </div>
                     </div>
