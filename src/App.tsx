@@ -273,6 +273,8 @@ export default function App() {
   const [eventType, setEventType] = useState<"cups" | "tubs">("cups");
   const [eventStatus, setEventStatus] = useState<"idle" | "success">("idle");
   const [eventFlavors, setEventFlavors] = useState<string[]>([]);
+  const [multiFlavorQuantities, setMultiFlavorQuantities] = useState<Record<string, number>>({});
+
   
   const availableFlavors = [
     "Chocolate", "Moscatel", "Tiramisú", "Fresa", "Naranja Piña", 
@@ -281,7 +283,20 @@ export default function App() {
   
   const [t, setT] = useState(DEFAULT_T);
 
-  const activeFlavor = orderType === "individual" ? flavorOfTheDay : tubFlavor;
+  const parsedIndividualFlavors = flavorOfTheDay.split(',').map(f => f.trim()).filter(Boolean);
+  const isMultiFlavor = orderType === "individual" && parsedIndividualFlavors.length > 1;
+  const activeFlavor = isMultiFlavor ? parsedIndividualFlavors[0] : (orderType === "individual" ? flavorOfTheDay : tubFlavor);
+  
+  const totalMultiQty = Object.values(multiFlavorQuantities).reduce((acc, val) => acc + (val || 0), 0);
+
+  const handleMultiQtyChange = (flavor: string, change: number) => {
+    setMultiFlavorQuantities(prev => {
+      const current = prev[flavor] || 0;
+      const next = Math.max(0, current + change);
+      return { ...prev, [flavor]: next };
+    });
+  };
+
   const flavorConfig = getFlavorConfig(activeFlavor);
   const currentPrice = orderType === "individual" ? 130 : 2800;
   const currentSmsUnits =
@@ -348,19 +363,21 @@ export default function App() {
         const lines = text.split("\n");
         if (lines.length > 0) {
           const firstRow = lines[0];
-          // A somewhat more robust CSV split that keeps empty columns
-          const colsRegex =
-            /(?!\s*$)\s*(?:'([^'\\]*(?:\\[\s\S][^'\\]*)*)'|"([^"\\]*(?:\\[\s\S][^"\\]*)*)"|([^,'"\s\\]*(?:\s+[^,'"\s\\]+)*))\s*(?:,|$)/g;
-          const cols = [];
+          // Use a regex to correctly split CSV, handling quotes
+          const splitCols: string[] = [];
           let match;
-          // Easy fallback: if it's simple CSV, split by comma works fine. We will just use split as the safest fallback.
-          const splitCols = firstRow
-            .split(",")
-            .map((s) => s.replace(/^"|"$/g, "").trim());
+          const colsRegex = /(".*?"|[^",\s]+)(?=\s*,|\s*$)/g;
+          
+          while ((match = colsRegex.exec(firstRow)) !== null) {
+            splitCols.push(match[0].replace(/^"|"$/g, "").trim());
+          }
 
-          const flavor = splitCols[0] || "";
-          const notif = splitCols[1] || "";
-          const tFlavor = splitCols[2] || "";
+          // Fallback if regex doesn't match properly for empty columns
+          const finalCols = firstRow.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(s => s.replace(/^"|"$/g, '').trim());
+
+          const flavor = finalCols[0] || "";
+          const notif = finalCols[1] || "";
+          const tFlavor = finalCols[2] || "";
 
           setFlavorOfTheDay(flavor);
           setNotification(notif);
@@ -495,10 +512,18 @@ export default function App() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quantity || parseInt(quantity) <= 0) {
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 2500);
-      return;
+    if (isMultiFlavor) {
+      if (totalMultiQty <= 0) {
+        setStatus("error");
+        setTimeout(() => setStatus("idle"), 2500);
+        return;
+      }
+    } else {
+      if (!quantity || parseInt(quantity) <= 0) {
+        setStatus("error");
+        setTimeout(() => setStatus("idle"), 2500);
+        return;
+      }
     }
 
     setStatus("loading");
@@ -517,8 +542,19 @@ export default function App() {
     if (selectedPayment === "bizum") paymentText = t.paymentBizum;
     if (selectedPayment === "iban") paymentText = t.paymentIban;
 
+    let flavorText = "";
+    
+    if (isMultiFlavor) {
+      flavorText = parsedIndividualFlavors
+        .filter(f => multiFlavorQuantities[f] > 0)
+        .map(f => `${multiFlavorQuantities[f]} ${currentSmsUnits} de ${f}`)
+        .join(", ");
+    } else {
+      flavorText = `${quantity} ${currentSmsUnits} de ${activeFlavor}`;
+    }
+
     const message = encodeURIComponent(
-      `${t.smsPrefix} ${quantity} ${currentSmsUnits} ${activeFlavor}. (Pago: ${paymentText})`,
+      `${t.smsPrefix} ${flavorText}. (Pago: ${paymentText})`,
     );
     window.open(`https://wa.me/5355260778?text=${message}`, "_blank");
 
@@ -526,6 +562,7 @@ export default function App() {
     setSelectedPayment(null);
     setStatus("success");
     setQuantity("");
+    setMultiFlavorQuantities({});
     setTimeout(() => setStatus("idle"), 3000);
   };
   
@@ -769,7 +806,7 @@ export default function App() {
                 />
               ) : (
                 <>
-                  <span>{activeFlavor}</span>
+                  <span>{isMultiFlavor ? "Sabores Variados" : activeFlavor}</span>
                   <motion.div
                     whileHover={{ scale: 1.08, rotate: 8 }}
                     transition={{ type: "spring", stiffness: 300, damping: 15 }}
@@ -805,7 +842,7 @@ export default function App() {
                   <p className="font-medium text-[15px] leading-relaxed max-w-[280px] mb-3">
                     {t.flavorDescTemplate}{" "}
                     <span className="font-semibold text-gray-700">
-                      {activeFlavor}
+                      {isMultiFlavor ? parsedIndividualFlavors.join(", ") : activeFlavor}
                     </span>
                     .
                   </p>
@@ -873,84 +910,132 @@ export default function App() {
               </div>
 
               {/* Input + Botón Combo */}
-              <motion.form
-                onSubmit={handleSubmit}
-                animate={
-                  status === "error" ? { x: [-8, 8, -6, 6, -3, 3, 0] } : {}
-                }
-                transition={{ duration: 0.4 }}
-                className={`flex items-stretch justify-center h-[64px] w-full max-w-[300px] rounded-full p-1.5 transition-all duration-300 relative z-20 ${
-                  status === "error"
-                    ? "bg-red-50 border-2 border-red-300 shadow-[0_8px_20px_rgba(239,68,68,0.2)]"
-                    : "bg-[#5e5c5a] shadow-[0_12px_24px_rgba(94,92,90,0.25),_inset_0_2px_4px_rgba(255,255,255,0.15)] hover:shadow-[0_16px_32px_rgba(94,92,90,0.35),_inset_0_2px_4px_rgba(255,255,255,0.15)]"
-                }`}
-              >
-                <input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  disabled={status === "loading" || status === "success"}
-                  className={`w-[45%] bg-transparent text-center text-2xl font-bold focus:outline-none focus:bg-black/10 rounded-l-full transition-colors disabled:opacity-70 ${
-                    status === "error"
-                      ? "text-red-600 placeholder:text-red-300"
-                      : "text-white placeholder:text-white/40"
-                  }`}
-                  placeholder="0"
-                />
-
-                <div
-                  className={`w-[1px] my-2 ${status === "error" ? "bg-red-200" : "bg-white/20"}`}
-                ></div>
-
-                <motion.button
-                  type="submit"
-                  disabled={status === "loading" || status === "success"}
-                  whileHover={
-                    status === "idle"
-                      ? { backgroundColor: "rgba(255,255,255,0.1)" }
-                      : {}
+              {isMultiFlavor ? (
+                <div className="w-full max-w-[320px] flex flex-col gap-2 relative z-20">
+                  {parsedIndividualFlavors.map(flavor => (
+                    <div key={flavor} className="flex justify-between items-center bg-[#5e5c5a] shadow-[0_4px_12px_rgba(94,92,90,0.15)] rounded-2xl p-3 border border-white/5">
+                      <span className="font-semibold text-white/90 text-[15px]">{flavor}</span>
+                      <div className="flex items-center gap-3">
+                        <button type="button" onClick={() => handleMultiQtyChange(flavor, -1)} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-lg leading-none pb-0.5">-</button>
+                        <span className="w-6 text-center font-bold text-white text-lg">{multiFlavorQuantities[flavor] || 0}</span>
+                        <button type="button" onClick={() => handleMultiQtyChange(flavor, 1)} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-white font-bold transition-all text-lg leading-none pb-0.5">+</button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <motion.form
+                    onSubmit={handleSubmit}
+                    animate={status === "error" ? { x: [-8, 8, -6, 6, -3, 3, 0] } : {}}
+                    transition={{ duration: 0.4 }}
+                    className="mt-2 w-full"
+                  >
+                    <button
+                      type="submit"
+                      disabled={status === "loading" || status === "success" || totalMultiQty === 0}
+                      className={`w-full h-[52px] rounded-full font-bold text-[15px] flex items-center justify-center transition-all ${
+                        status === "success" 
+                          ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.4)]"
+                          : status === "error"
+                            ? "bg-red-500 text-white shadow-[0_4px_12px_rgba(239,68,68,0.4)]"
+                            : totalMultiQty > 0 
+                              ? "bg-[#5e5c5a] hover:bg-[#6c6a68] text-white shadow-[0_8px_24px_rgba(94,92,90,0.25)] hover:shadow-[0_12px_28px_rgba(94,92,90,0.35)] active:scale-[0.98]" 
+                              : "bg-[#5e5c5a]/50 text-white/50 cursor-not-allowed"
+                      }`}
+                    >
+                      {status === "loading" ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                          className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                        />
+                      ) : status === "success" ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : (
+                        `Continuar (${totalMultiQty})`
+                      )}
+                    </button>
+                  </motion.form>
+                </div>
+              ) : (
+                <motion.form
+                  onSubmit={handleSubmit}
+                  animate={
+                    status === "error" ? { x: [-8, 8, -6, 6, -3, 3, 0] } : {}
                   }
-                  whileTap={status === "idle" ? { scale: 0.95 } : {}}
-                  className={`w-[55%] relative flex items-center justify-center text-lg font-bold font-sans rounded-full mx-1 transition-all duration-300 ${
-                    status === "success"
-                      ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.4)]"
-                      : status === "error"
-                        ? "bg-red-500 text-white shadow-[0_4px_12px_rgba(239,68,68,0.4)] hover:bg-red-600"
-                        : "bg-transparent text-white"
+                  transition={{ duration: 0.4 }}
+                  className={`flex items-stretch justify-center h-[64px] w-full max-w-[300px] rounded-full p-1.5 transition-all duration-300 relative z-20 ${
+                    status === "error"
+                      ? "bg-red-50 border-2 border-red-300 shadow-[0_8px_20px_rgba(239,68,68,0.2)]"
+                      : "bg-[#5e5c5a] shadow-[0_12px_24px_rgba(94,92,90,0.25),_inset_0_2px_4px_rgba(255,255,255,0.15)] hover:shadow-[0_16px_32px_rgba(94,92,90,0.35),_inset_0_2px_4px_rgba(255,255,255,0.15)]"
                   }`}
                 >
-                  {status === "loading" ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.8,
-                        ease: "linear",
-                      }}
-                      className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                    />
-                  ) : status === "success" ? (
-                    <motion.div
-                      initial={{ scale: 0, rotate: -90 }}
-                      animate={{ scale: 1, rotate: 0 }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 200,
-                        damping: 15,
-                      }}
-                    >
-                      <CheckCircle2 className="w-6 h-6" />
-                    </motion.div>
-                  ) : (
-                    t.sendBtn
-                  )}
-                </motion.button>
-              </motion.form>
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    disabled={status === "loading" || status === "success"}
+                    className={`w-[45%] bg-transparent text-center text-2xl font-bold focus:outline-none focus:bg-black/10 rounded-l-full transition-colors disabled:opacity-70 ${
+                      status === "error"
+                        ? "text-red-600 placeholder:text-red-300"
+                        : "text-white placeholder:text-white/40"
+                    }`}
+                    placeholder="0"
+                  />
+
+                  <div
+                    className={`w-[1px] my-2 ${status === "error" ? "bg-red-200" : "bg-white/20"}`}
+                  ></div>
+
+                  <motion.button
+                    type="submit"
+                    disabled={status === "loading" || status === "success"}
+                    whileHover={
+                      status === "idle"
+                        ? { backgroundColor: "rgba(255,255,255,0.1)" }
+                        : {}
+                    }
+                    whileTap={status === "idle" ? { scale: 0.95 } : {}}
+                    className={`w-[55%] relative flex items-center justify-center text-lg font-bold font-sans rounded-full mx-1 transition-all duration-300 ${
+                      status === "success"
+                        ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.4)]"
+                        : status === "error"
+                          ? "bg-red-500 text-white shadow-[0_4px_12px_rgba(239,68,68,0.4)] hover:bg-red-600"
+                          : "bg-transparent text-white"
+                    }`}
+                  >
+                    {status === "loading" ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 0.8,
+                          ease: "linear",
+                        }}
+                        className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                      />
+                    ) : status === "success" ? (
+                      <motion.div
+                        initial={{ scale: 0, rotate: -90 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 200,
+                          damping: 15,
+                        }}
+                      >
+                        <CheckCircle2 className="w-6 h-6" />
+                      </motion.div>
+                    ) : (
+                      t.sendBtn
+                    )}
+                  </motion.button>
+                </motion.form>
+              )}
 
               {/* Monto Total */}
               <AnimatePresence>
-                {quantity && parseInt(quantity) > 0 && status !== "error" && (
+                {((!isMultiFlavor && quantity && parseInt(quantity) > 0) || (isMultiFlavor && totalMultiQty > 0)) && status !== "error" && (
                   <motion.div
                     initial={{ opacity: 0, height: 0, marginTop: 0 }}
                     animate={{ opacity: 1, height: "auto", marginTop: 16 }}
@@ -965,7 +1050,7 @@ export default function App() {
                         className="text-2xl font-black tracking-tight"
                         style={{ color: flavorConfig.color }}
                       >
-                        ${(parseInt(quantity) * currentPrice).toLocaleString()}{" "}
+                        ${((isMultiFlavor ? totalMultiQty : parseInt(quantity)) * currentPrice).toLocaleString()}{" "}
                         <span className="text-sm font-semibold text-gray-500">
                           {t.currency}
                         </span>
