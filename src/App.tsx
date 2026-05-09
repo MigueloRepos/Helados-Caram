@@ -32,6 +32,12 @@ import {
   Landmark,
   X,
   Bell,
+  CalendarDays,
+  PartyPopper,
+  User,
+  MapPinHouse,
+  Send,
+  Clock
 } from "lucide-react";
 
 const getFlavorConfig = (flavor: string) => {
@@ -218,6 +224,15 @@ const DEFAULT_T = {
   summaryQuantity: "Cantidad",
   summaryTotal: "Total",
   soldOutToday: "Agotado solo por hoy!",
+  eventsTitle: "Reservas para eventos",
+  eventsSubtitle: "Haga su encargo especial para celebraciones en la fecha indicada",
+  eventName: "Nombre y Apellidos",
+  eventAddress: "Dirección particular",
+  eventDate: "Fecha para la reserva",
+  eventTime: "Hora de entrega",
+  eventQty: "Cantidad deseada",
+  eventBtn: "Reservar vía WhatsApp",
+  eventSuccess: "Redirigiendo a WhatsApp..."
 };
 
 export default function App() {
@@ -228,6 +243,7 @@ export default function App() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [showDetails, setShowDetails] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
 
   // Estado del tiempo (Navegación Pulgar-First / Glassmorphism)
@@ -247,6 +263,22 @@ export default function App() {
   const [orderType, setOrderType] = useState<"individual" | "tub">(
     "individual",
   );
+  
+  // Estado para reserva de eventos
+  const [eventName, setEventName] = useState("");
+  const [eventAddress, setEventAddress] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
+  const [eventQty, setEventQty] = useState("");
+  const [eventType, setEventType] = useState<"cups" | "tubs">("cups");
+  const [eventStatus, setEventStatus] = useState<"idle" | "success">("idle");
+  const [eventFlavors, setEventFlavors] = useState<string[]>([]);
+  
+  const availableFlavors = [
+    "Chocolate", "Moscatel", "Tiramisú", "Fresa", "Naranja Piña", 
+    "Coco", "Piña", "Tres Leches", "Mantecado"
+  ];
+  
   const [t, setT] = useState(DEFAULT_T);
 
   const activeFlavor = orderType === "individual" ? flavorOfTheDay : tubFlavor;
@@ -495,6 +527,32 @@ export default function App() {
     setStatus("success");
     setQuantity("");
     setTimeout(() => setStatus("idle"), 3000);
+  };
+  
+  const submitEventOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (eventFlavors.length === 0) {
+      alert("Por favor, seleccione al menos un sabor.");
+      return;
+    }
+    setEventStatus("success");
+    
+    const typeLabel = eventType === "cups" ? t.tabUnits || "Vasos de 8oz" : t.tabTubs || "Tinas";
+    const flavorsList = eventFlavors.join(", ");
+    const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${eventName}\n*Dirección:* ${eventAddress}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
+    
+    setTimeout(() => {
+      window.open(`https://wa.me/5355260778?text=${encodeURIComponent(message)}`, "_blank");
+      setTimeout(() => {
+        setEventStatus("idle");
+        setEventName("");
+        setEventAddress("");
+        setEventQty("");
+        setEventDate("");
+        setEventTime("");
+        setEventFlavors([]);
+      }, 500);
+    }, 800);
   };
 
   return (
@@ -936,6 +994,17 @@ export default function App() {
             }}
             className="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex flex-col items-center"
           >
+            {/* Floating Reservation Button */}
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.9, type: 'spring' }}
+              onClick={() => setShowEventModal(true)}
+              className="mb-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full px-5 py-3 shadow-[0_8px_24px_-6px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2.5 hover:-translate-y-1 hover:shadow-[0_12px_28px_-8px_rgba(245,158,11,0.6)] active:scale-95 transition-all outline-none"
+            >
+              <PartyPopper size={20} />
+              <span className="font-bold text-[15px] drop-shadow-sm">Reservar</span>
+            </motion.button>
             <AnimatePresence>
               {weatherMenuOpen && (
                 <motion.div
@@ -1163,6 +1232,179 @@ export default function App() {
               >
                 {t.paymentConfirm}
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Event Reservation Modal */}
+      <AnimatePresence>
+        {showEventModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-[28px] shadow-2xl p-6 w-full max-w-sm relative overflow-hidden group"
+            >
+              <button 
+                onClick={() => { setShowEventModal(false); setEventStatus("idle"); }} 
+                className="absolute top-4 right-4 p-2 bg-gray-100/80 rounded-full text-gray-500 hover:bg-gray-200 transition-colors z-10"
+                title="Cerrar"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-amber-100/40 to-transparent rounded-bl-full pointer-events-none -z-10" />
+              
+              <div className="flex items-center gap-3 mb-5 pr-8">
+                <div className="w-11 h-11 rounded-[18px] bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center text-amber-500 border border-amber-100/50 shadow-sm shrink-0">
+                  <PartyPopper size={22} className="text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-gray-800 leading-tight text-base">{t.eventsTitle || 'Reservas para eventos'}</h3>
+                  <p className="text-[12px] font-medium text-gray-500 leading-snug pr-2 mt-0.5">{t.eventsSubtitle || 'Haga su encargo especial para celebraciones en la fecha indicada'}</p>
+                </div>
+              </div>
+
+              <form onSubmit={submitEventOrder} className="space-y-3.5 relative z-10">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <User size={16} />
+                  </div>
+                  <input
+                    required
+                    type="text"
+                    placeholder={t.eventName || 'Nombre y Apellidos'}
+                    value={eventName}
+                    onChange={(e) => setEventName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold placeholder-gray-400 text-gray-800"
+                  />
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <MapPinHouse size={16} />
+                  </div>
+                  <input
+                    required
+                    type="text"
+                    placeholder={t.eventAddress || 'Dirección particular'}
+                    value={eventAddress}
+                    onChange={(e) => setEventAddress(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold placeholder-gray-400 text-gray-800"
+                  />
+                </div>
+
+                <div className="flex gap-2.5">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <CalendarDays size={16} />
+                    </div>
+                    <input
+                      required
+                      type="date"
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold text-gray-600 uppercase"
+                    />
+                  </div>
+                  <div className="relative flex-[0.7]">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <Clock size={16} />
+                    </div>
+                    <input
+                      required
+                      type="time"
+                      value={eventTime}
+                      onChange={(e) => setEventTime(e.target.value)}
+                      className="w-full pl-10 pr-2 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-semibold text-gray-600"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex gap-2.5">
+                  <div className="relative flex-[0.8] sm:flex-[0.9]">
+                    <input
+                      required
+                      type="number"
+                      min="1"
+                      placeholder={t.eventQty || 'Cantidad'}
+                      value={eventQty}
+                      onChange={(e) => setEventQty(e.target.value)}
+                      className="w-full px-3 py-3.5 bg-gray-50/80 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/10 transition-all font-bold text-center placeholder-gray-400 text-gray-800"
+                    />
+                  </div>
+                  <div className="flex-1 bg-gray-50/80 border border-gray-200/80 rounded-xl p-[5px] flex relative shadow-inner">
+                    <div
+                      className="absolute top-[5px] bottom-[5px] bg-white rounded-[9px] shadow-[0_2px_6px_rgba(0,0,0,0.06)] border border-gray-100/50 pointer-events-none"
+                      style={{ width: 'calc(50% - 5px)', left: eventType === 'cups' ? '5px' : 'calc(50%)', transition: 'left 0.25s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEventType('cups')}
+                      className={`flex-1 relative z-10 text-[11px] font-extrabold tracking-wide rounded-lg transition-colors ${eventType === 'cups' ? 'text-amber-600 drop-shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      VASOS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEventType('tubs')}
+                      className={`flex-1 relative z-10 text-[11px] font-extrabold tracking-wide rounded-lg transition-colors ${eventType === 'tubs' ? 'text-amber-600 drop-shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      TINAS
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50/80 border border-gray-200/80 rounded-xl p-3.5 space-y-2 max-h-[160px] overflow-y-auto">
+                  <p className="text-[13px] font-semibold text-gray-700 mb-2">Seleccione los sabores:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableFlavors.map(flavor => (
+                      <label key={flavor} className="flex items-center gap-2 cursor-pointer group">
+                        <div className="relative flex items-center justify-center">
+                          <input 
+                            type="checkbox" 
+                            name="flavor"
+                            value={flavor}
+                            checked={eventFlavors.includes(flavor)}
+                            onChange={(e) => {
+                              if (e.target.checked) setEventFlavors([...eventFlavors, flavor]);
+                              else setEventFlavors(eventFlavors.filter(f => f !== flavor));
+                            }}
+                            className="w-4 h-4 rounded appearance-none border-2 border-gray-300 checked:bg-amber-500 checked:border-amber-500 transition-colors" 
+                          />
+                          <CheckCircle2 size={12} className={`absolute text-white pointer-events-none transition-opacity ${eventFlavors.includes(flavor) ? 'opacity-100' : 'opacity-0'}`} />
+                        </div>
+                        <span className="text-[13px] text-gray-600 font-medium group-hover:text-gray-800 transition-colors">{flavor}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={eventStatus === 'success'}
+                  className="w-full mt-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold text-[15px] py-4 rounded-xl shadow-[0_8px_20px_-6px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(245,158,11,0.5)] transform hover:-translate-y-0.5 transition-all outline-none focus:ring-4 focus:ring-amber-500/20 active:scale-[0.98] flex items-center justify-center gap-2.5 group/btn"
+                >
+                  {eventStatus === 'success' ? (
+                    <>
+                      <CheckCircle2 size={18} className="text-white" />
+                      <span className="drop-shadow-sm">{t.eventSuccess || 'Enviando...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="drop-shadow-sm">{t.eventBtn || 'Reservar vía WhatsApp'}</span>
+                      <Send size={16} className="text-white/90 group-hover/btn:translate-x-1 group-hover/btn:-translate-y-0.5 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </form>
             </motion.div>
           </motion.div>
         )}
