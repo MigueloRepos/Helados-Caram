@@ -585,7 +585,8 @@ export default function App() {
     if (customerName || customerAddress) {
       let mapLink = "";
       if (customerAddress) {
-        mapLink = `\n*Ubicación:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
+        const fullQuery = `${customerAddress}, Puerto Padre, Las Tunas, Cuba`;
+        mapLink = `\n*Ubicación:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullQuery)}`;
       }
       customerInfoLabel = `\n\n*Cliente:* ${customerName || 'No especificado'}\n*Dirección:* ${customerAddress || 'No especificada'}${mapLink}`;
     }
@@ -621,7 +622,8 @@ export default function App() {
 
     let addressInfo = `*Dirección:* ${customerAddress}`;
     if (customerAddress) {
-      addressInfo += `\n*Ubicación:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
+      const fullQuery = `${customerAddress}, Puerto Padre, Las Tunas, Cuba`;
+      addressInfo += `\n*Ubicación:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullQuery)}`;
     }
 
     const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${customerName}\n${addressInfo}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Total:* $${totalEventAmount.toLocaleString()} ${t.currency || "CUP"}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
