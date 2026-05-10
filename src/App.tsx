@@ -583,7 +583,11 @@ export default function App() {
 
     let customerInfoLabel = "";
     if (customerName || customerAddress) {
-      customerInfoLabel = `\n\n*Cliente:* ${customerName || 'No especificado'}\n*Dirección:* ${customerAddress || 'No especificada'}`;
+      let mapLink = "";
+      if (customerAddress) {
+        mapLink = `\n*Ubicación:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
+      }
+      customerInfoLabel = `\n\n*Cliente:* ${customerName || 'No especificado'}\n*Dirección:* ${customerAddress || 'No especificada'}${mapLink}`;
     }
 
     const totalAmount = (isMultiFlavor ? totalMultiQty : parseInt(quantity || "0")) * currentPrice;
@@ -615,7 +619,12 @@ export default function App() {
     const eventPrice = eventType === "cups" ? 130 : 2800;
     const totalEventAmount = parseInt(eventQty || "0") * eventPrice;
 
-    const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${customerName}\n*Dirección:* ${customerAddress}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Total:* $${totalEventAmount.toLocaleString()} ${t.currency || "CUP"}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
+    let addressInfo = `*Dirección:* ${customerAddress}`;
+    if (customerAddress) {
+      addressInfo += `\n*Ubicación:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
+    }
+
+    const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${customerName}\n${addressInfo}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Total:* $${totalEventAmount.toLocaleString()} ${t.currency || "CUP"}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
     
     setTimeout(() => {
       window.open(`https://wa.me/5355260778?text=${encodeURIComponent(message)}`, "_blank");
