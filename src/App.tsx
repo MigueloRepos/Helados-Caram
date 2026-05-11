@@ -745,7 +745,7 @@ export default function App() {
             transition={{ delay: 0.05, duration: 0.5 }}
             className="text-sm font-bold text-gray-400 tracking-[0.2em] uppercase mb-1"
           >
-            ¡{greeting}!
+            ¡{greeting}{customerName ? `, ${customerName.split(' ')[0]}` : ''}!
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 15 }}
