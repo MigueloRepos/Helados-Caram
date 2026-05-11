@@ -291,15 +291,15 @@ export default function App() {
   const [eventTime, setEventTime] = useState("");
   const [eventQty, setEventQty] = useState("");
   const [eventType, setEventType] = useState<"cups" | "tubs">("cups");
-  const [eventStatus, setEventStatus] = useState<"idle" | "success">("idle");
+  const [eventStatus, setEventStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [eventFlavors, setEventFlavors] = useState<string[]>([]);
   const [multiFlavorQuantities, setMultiFlavorQuantities] = useState<Record<string, number>>({});
 
   
-  const availableFlavors = [
+  const [availableFlavors, setAvailableFlavors] = useState<string[]>([
     "Chocolate", "Moscatel", "Tiramisú", "Fresa", "Naranja Piña", 
     "Coco", "Piña", "Tres Leches", "Mantecado"
-  ];
+  ]);
   
   const [t, setT] = useState(DEFAULT_T);
 
@@ -399,10 +399,18 @@ export default function App() {
           const flavor = finalCols[0] || "";
           const notif = finalCols[1] || "";
           const tFlavor = finalCols[2] || "";
+          const d1Flavors = finalCols[3] || "";
 
           setFlavorOfTheDay(flavor);
           setNotification(notif);
           setTubFlavor(tFlavor);
+
+          if (d1Flavors.trim()) {
+            const parsedFlavors = d1Flavors.split(',').map(f => f.replace(/^"|"$/g, '').trim()).filter(Boolean);
+            setAvailableFlavors(parsedFlavors);
+          } else {
+            setAvailableFlavors([]);
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -609,10 +617,12 @@ export default function App() {
   const submitEventOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (eventFlavors.length === 0) {
-      alert("Por favor, seleccione al menos un sabor.");
+      setEventStatus("error");
+      setTimeout(() => setEventStatus("idle"), 3000);
       return;
     }
-    setEventStatus("success");
+    
+    setEventStatus("loading");
     
     const typeLabel = eventType === "cups" ? t.tabUnits || "Vasos de 8oz" : t.tabTubs || "Tinas";
     const flavorsList = eventFlavors.join(", ");
@@ -629,15 +639,18 @@ export default function App() {
     const message = `Hola, quiero hacer una reserva para un evento:\n\n*Nombre:* ${customerName}\n${addressInfo}\n*Sabores:* ${flavorsList}\n*Cantidad:* ${eventQty} ${typeLabel}\n*Total:* $${totalEventAmount.toLocaleString()} ${t.currency || "CUP"}\n*Fecha del evento:* ${eventDate}\n*Hora:* ${eventTime}`;
     
     setTimeout(() => {
-      window.open(`https://wa.me/5355260778?text=${encodeURIComponent(message)}`, "_blank");
+      setEventStatus("success");
       setTimeout(() => {
-        setEventStatus("idle");
-        setEventQty("");
-        setEventDate("");
-        setEventTime("");
-        setEventFlavors([]);
-      }, 500);
-    }, 800);
+        window.open(`https://wa.me/5355260778?text=${encodeURIComponent(message)}`, "_blank");
+        setTimeout(() => {
+          setEventStatus("idle");
+          setEventQty("");
+          setEventDate("");
+          setEventTime("");
+          setEventFlavors([]);
+        }, 500);
+      }, 1000);
+    }, 1200);
   };
 
   return (
@@ -1533,35 +1546,59 @@ export default function App() {
 
                 <div className="bg-gray-50/80 border border-gray-200/80 rounded-xl p-3.5 space-y-2 max-h-[160px] overflow-y-auto">
                   <p className="text-[13px] font-semibold text-gray-700 mb-2">Seleccione los sabores:</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {availableFlavors.map(flavor => (
-                      <label key={flavor} className="flex items-center gap-2 cursor-pointer group">
-                        <div className="relative flex items-center justify-center">
-                          <input 
-                            type="checkbox" 
-                            name="flavor"
-                            value={flavor}
-                            checked={eventFlavors.includes(flavor)}
-                            onChange={(e) => {
-                              if (e.target.checked) setEventFlavors([...eventFlavors, flavor]);
-                              else setEventFlavors(eventFlavors.filter(f => f !== flavor));
-                            }}
-                            className="w-4 h-4 rounded appearance-none border-2 border-gray-300 checked:bg-amber-500 checked:border-amber-500 transition-colors" 
-                          />
-                          <CheckCircle2 size={12} className={`absolute text-white pointer-events-none transition-opacity ${eventFlavors.includes(flavor) ? 'opacity-100' : 'opacity-0'}`} />
-                        </div>
-                        <span className="text-[13px] text-gray-600 font-medium group-hover:text-gray-800 transition-colors">{flavor}</span>
-                      </label>
-                    ))}
-                  </div>
+                  {availableFlavors.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableFlavors.map(flavor => (
+                        <label key={flavor} className="flex items-center gap-2 cursor-pointer group">
+                          <div className="relative flex items-center justify-center">
+                            <input 
+                              type="checkbox" 
+                              name="flavor"
+                              value={flavor}
+                              checked={eventFlavors.includes(flavor)}
+                              onChange={(e) => {
+                                if (e.target.checked) setEventFlavors([...eventFlavors, flavor]);
+                                else setEventFlavors(eventFlavors.filter(f => f !== flavor));
+                              }}
+                              className="w-4 h-4 rounded appearance-none border-2 border-gray-300 checked:bg-amber-500 checked:border-amber-500 transition-colors" 
+                            />
+                            <CheckCircle2 size={12} className={`absolute text-white pointer-events-none transition-opacity ${eventFlavors.includes(flavor) ? 'opacity-100' : 'opacity-0'}`} />
+                          </div>
+                          <span className="text-[13px] text-gray-600 font-medium group-hover:text-gray-800 transition-colors">{flavor}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm font-medium text-gray-500">No hay sabores disponibles para reservar.</p>
+                    </div>
+                  )}
                 </div>
 
                 <button
                   type="submit"
-                  disabled={eventStatus === 'success'}
-                  className="w-full mt-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold text-[15px] py-4 rounded-xl shadow-[0_8px_20px_-6px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(245,158,11,0.5)] transform hover:-translate-y-0.5 transition-all outline-none focus:ring-4 focus:ring-amber-500/20 active:scale-[0.98] flex items-center justify-center gap-2.5 group/btn"
+                  disabled={eventStatus === 'loading' || eventStatus === 'success' || availableFlavors.length === 0}
+                  className={`w-full mt-3 text-white font-bold text-[15px] py-4 rounded-xl shadow-[0_8px_20px_-6px_rgba(245,158,11,0.4)] transform transition-all outline-none focus:ring-4 flex items-center justify-center gap-2.5 group/btn ${
+                    eventStatus === 'error'
+                      ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500/20 shadow-red-500/40'
+                      : eventStatus === 'success'
+                        ? 'bg-emerald-500 shadow-emerald-500/40'
+                        : availableFlavors.length === 0
+                          ? 'bg-gray-400 cursor-not-allowed opacity-70 shadow-none'
+                          : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:shadow-[0_12px_24px_-6px_rgba(245,158,11,0.5)] hover:-translate-y-0.5 focus:ring-amber-500/20 active:scale-[0.98]'
+                  }`}
                 >
-                  {eventStatus === 'success' ? (
+                  {eventStatus === 'loading' ? (
+                    <>
+                      <Loader2 size={18} className="text-white animate-spin" />
+                      <span className="drop-shadow-sm">Procesando reserva...</span>
+                    </>
+                  ) : eventStatus === 'error' ? (
+                    <>
+                      <AlertCircle size={18} className="text-white" />
+                      <span className="drop-shadow-sm">Por favor selecciona un sabor</span>
+                    </>
+                  ) : eventStatus === 'success' ? (
                     <>
                       <CheckCircle2 size={18} className="text-white" />
                       <span className="drop-shadow-sm">{t.eventSuccess || 'Enviando...'}</span>
