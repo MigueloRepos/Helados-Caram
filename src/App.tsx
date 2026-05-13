@@ -37,7 +37,9 @@ import {
   User,
   MapPinHouse,
   Send,
-  Clock
+  Clock,
+  Eye,
+  Users
 } from "lucide-react";
 
 const getFlavorConfig = (flavor: string) => {
@@ -249,6 +251,21 @@ export default function App() {
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [dailyVisits, setDailyVisits] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchVisits = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0].replace(/-/g, '_');
+        const res = await fetch(`https://api.counterapi.dev/v1/heladoscaram_1/visits_${today}/up`);
+        const data = await res.json();
+        setDailyVisits(data.count);
+      } catch (e) {
+        console.error("Error fetching visits:", e);
+      }
+    };
+    fetchVisits();
+  }, []);
 
   // Efecto para nuevos clientes
   useEffect(() => {
@@ -771,6 +788,20 @@ export default function App() {
           >
             {t.shopName}
           </motion.h2>
+          
+          {dailyVisits !== null && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45, duration: 0.5 }}
+              className="mt-4 flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-white/60 backdrop-blur-md rounded-full shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] border border-white/80"
+            >
+              <Users size={14} className="text-amber-500" />
+              <span className="text-[11px] font-bold tracking-widest text-gray-500 uppercase">
+                {dailyVisits} {dailyVisits === 1 ? 'visita hoy' : 'visitas hoy'}
+              </span>
+            </motion.div>
+          )}
         </div>
 
         {/* Toggle Tipo de Pedido */}
