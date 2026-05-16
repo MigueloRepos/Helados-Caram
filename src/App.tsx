@@ -428,6 +428,38 @@ export default function App() {
           } else {
             setAvailableFlavors([]);
           }
+          
+          if (lines.length > 1) {
+            const secondRow = lines[1];
+            const splitRow2: string[] = [];
+            let match2;
+            const colsRegex2 = /(".*?"|[^",\s]+)(?=\s*,|\s*$)/g;
+            while ((match2 = colsRegex2.exec(secondRow)) !== null) {
+              splitRow2.push(match2[0].replace(/^"|"$/g, "").trim());
+            }
+            const fallbackRow2 = secondRow.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(s => s.replace(/^"|"$/g, '').trim());
+            const a2Notif = splitRow2[0] || fallbackRow2[0] || "";
+            
+            if (a2Notif && a2Notif.trim() !== "") {
+              const cleanedNotif = a2Notif.trim();
+              const lastNotif = localStorage.getItem('last_push_notif');
+              if (lastNotif !== cleanedNotif) {
+                if ('Notification' in window) {
+                  if (Notification.permission === 'granted') {
+                    new Notification('Helados Caram', { body: cleanedNotif, icon: '/logo.png' });
+                    localStorage.setItem('last_push_notif', cleanedNotif);
+                  } else if (Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                      if (permission === 'granted') {
+                        new Notification('Helados Caram', { body: cleanedNotif, icon: '/logo.png' });
+                        localStorage.setItem('last_push_notif', cleanedNotif);
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
