@@ -654,6 +654,14 @@ export default function App() {
       `${t.smsPrefix} ${flavorText}. (Total: $${totalAmount.toLocaleString()} ${t.currency}) (Pago: ${paymentText})${customerInfoLabel}`,
     );
     window.open(`https://wa.me/5355260778?text=${message}`, "_blank");
+    
+    setTimeout(() => {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const smsSeparator = isIOS ? "&" : "?";
+      const a = document.createElement("a");
+      a.href = `sms:+5355260778${smsSeparator}body=${message}`;
+      a.click();
+    }, 100);
 
     setShowPaymentModal(false);
     setSelectedPayment(null);
@@ -690,7 +698,17 @@ export default function App() {
     setTimeout(() => {
       setEventStatus("success");
       setTimeout(() => {
-        window.open(`https://wa.me/5355260778?text=${encodeURIComponent(message)}`, "_blank");
+        const encMessage = encodeURIComponent(message);
+        window.open(`https://wa.me/5355260778?text=${encMessage}`, "_blank");
+        
+        setTimeout(() => {
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+          const smsSeparator = isIOS ? "&" : "?";
+          const a = document.createElement("a");
+          a.href = `sms:+5355260778${smsSeparator}body=${encMessage}`;
+          a.click();
+        }, 100);
+        
         setTimeout(() => {
           setEventStatus("idle");
           setEventQty("");
